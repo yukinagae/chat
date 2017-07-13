@@ -6,16 +6,17 @@ use mio::tcp::{TcpListener, TcpStream};
 use std::net::SocketAddr;
 use std::io;
 use std::collections::HashMap;
-
 use http_muncher::{Parser, ParserHandler};
-
 use std::io::Read;
 
-// const
+//
+// config
+//
 const SERVER: Token = Token(0);
 
-
+//
 // main
+//
 fn main() {
 
     let address = "0.0.0.0:10000".parse::<SocketAddr>().unwrap();
@@ -24,6 +25,7 @@ fn main() {
     let mut server = WebSocketServer::new(server_socket);
 
     let poll = Poll::new().unwrap();
+
     poll.register(
         &server,
         SERVER,
@@ -33,16 +35,19 @@ fn main() {
 
     let mut events = Events::with_capacity(1024);
 
+    // event loop
     loop {
         poll.poll(&mut events, None).unwrap();
 
         for event in events.iter() {
             match event.token() {
+                // first connection
                 SERVER => {
                     let client_socket = match server.socket.accept() {
                         Err(e) => { println!("Accept error: {}", e); return; },
                         Ok((sock, _)) => sock
                     };
+                    println!("{:?}", client_socket);
                     server.token_counter += 1;
                     let new_token = Token(server.token_counter);
                     server.clients.insert(new_token, WebSocketClient::new(client_socket));
@@ -56,10 +61,10 @@ fn main() {
                         PollOpt::edge() | PollOpt::oneshot()
                     ).unwrap();
                 }
+                // client per connection
                 token => {
                     let mut client = server.clients.get_mut(&token).unwrap();
-                    let a = client.read();
-                    println!("{:?}", a);
+                    client.read();
                     poll.reregister(
                         &client.socket,
                         token,
@@ -72,6 +77,9 @@ fn main() {
     }
 }
 
+//
+// server
+//
 struct WebSocketServer {
     socket: TcpListener,
     token_counter: usize,
@@ -102,9 +110,13 @@ impl Evented for WebSocketServer {
     }
 }
 
+//
+// client
+//
 struct HttpParser;
 impl ParserHandler for HttpParser {}
 
+#[derive(Debug)]
 struct WebSocketClient {
     socket: TcpStream,
     http_parser: Parser,
@@ -120,13 +132,14 @@ impl WebSocketClient {
         loop {
             let mut buf = [0; 2048];
             match self.socket.read(&mut buf) {
-                Err(e) => {println!("Error while reading socket: {:?}", e); return; },
+                Err(e) => { println!("Error while reading socket: {:?}", e); return; },
                 Ok(len) => {
                     self.http_parser.parse(&mut HttpParser {}, &buf[0..len]);
-                    if self.http_parser.is_upgrade() {
-                        // TODO:
+                    // TODO:
+                    // if self.http_parser.is_upgrade() {
+                        println!("{:?}", len);
                         break;
-                    }
+                    // }
                 }
             }
         }
