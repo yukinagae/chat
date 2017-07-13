@@ -59,7 +59,7 @@ fn main() {
                     SERVER => {
                         let client_socket = match server.socket.accept() {
                             Err(e) => { println!("Accept error: {}", e); return; },
-                        Ok((sock, _)) => sock
+                            Ok((sock, _)) => sock
                         };
                         println!("{:?}", client_socket);
                         server.token_counter += 1;
