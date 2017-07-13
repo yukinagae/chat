@@ -9,15 +9,13 @@ use std::io;
 const SERVER: Token = Token(0);
 
 fn main() {
-    let poll = Poll::new().unwrap();
-    // let mut handler = WebSocketServer;
-    // event_loop.run(&mut handler);
 
     let address = "0.0.0.0:10000".parse::<SocketAddr>().unwrap();
     let server_socket = TcpStream::connect(&address).unwrap();
 
     let server = WebSocketServer { socket: server_socket };
 
+    let poll = Poll::new().unwrap();
     poll.register(
         &server,
         SERVER,
