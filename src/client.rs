@@ -11,6 +11,8 @@ use handler::HttpParserHandler;
 use std::str;
 use std::io::Read;
 use std::io::Write;
+use frame::WebSocketFrame;
+use frame::OpCode;
 
 #[derive(Debug)]
 pub struct WebSocketClient {
@@ -37,6 +39,42 @@ impl WebSocketClient {
     }
 
     pub fn read(&mut self) {
+        match self.state {
+            ClientState::AwaitingHandshake => self.read_handshake(),
+            ClientState::Connected => self.read_frame(),
+            _ => {},
+        }
+    }
+
+    pub fn read_frame(&mut self) {
+        let frame = WebSocketFrame::read(&mut self.socket);
+        match frame {
+            Ok(frame) => {
+                match frame.get_opcode() {
+                    OpCode::TextFrame => {
+                        println!("{:?}", frame);
+                        let payload = String::from_utf8(frame.payload).unwrap();
+                        println!("{:?}", payload);
+                    },
+                    OpCode::BinaryFrame => {
+
+                    },
+                    OpCode::Ping => {
+
+                    },
+                    OpCode::ConnectionClose => {
+
+                    },
+                    _ => {}
+                }
+
+                // TODO: self outgoing
+            }
+            Err(e) => println!("error while reading frame: {}", e)
+        }
+    }
+
+    pub fn read_handshake(&mut self) {
         loop {
             let mut buf = [0; 2048];
             match self.socket.read(&mut buf) {
@@ -49,8 +87,15 @@ impl WebSocketClient {
                         println!("Error while reading http: {:?}", parser.error());
                         return;
                     }
+
+                    let is_upgrade = if let ClientState::AwaitingHandshake = self.state {
+                        parser.is_upgrade()
+                    } else {
+                        false
+                    };
+
                     // websocket protocol
-                    if parser.is_upgrade() {
+                    if is_upgrade {
                         self.state = ClientState::HandshakeResponse;
                         self.interest.remove(Ready::readable());
                         self.interest.insert(Ready::writable()); // now writable

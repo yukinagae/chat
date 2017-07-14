@@ -30,6 +30,7 @@ impl OpCode {
     }
 }
 
+#[derive(Debug)]
 pub struct WebSocketFrameHeader {
     fin: bool,
     rsv1: bool,
@@ -40,10 +41,11 @@ pub struct WebSocketFrameHeader {
     payload_length: u8,
 }
 
+#[derive(Debug)]
 pub struct WebSocketFrame {
     header: WebSocketFrameHeader,
     mask: Option<[u8; 4]>,
-    payload: Vec<u8>,
+    pub payload: Vec<u8>,
 }
 
 impl WebSocketFrame {
