@@ -4,7 +4,10 @@ version = "0.1.0"
 authors = ["Yuki Nagae <yuki.nagae1130@gmail.com>"]
 
 [dependencies]
-mio = { git = "https://github.com/carllerche/mio" }
-http-muncher = "0.3.1"
-rustc-serialize = "0.3.24"
-sha1 = "0.2.0"
+http-muncher = "0.3.*"
+rustc-serialize = "0.3.*"
+sha1 = "0.2.*"
+byteorder = "0.3.*"
+
+[dependencies.mio]
+git = "https://github.com/carllerche/mio"

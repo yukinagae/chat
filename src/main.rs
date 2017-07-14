@@ -2,10 +2,12 @@ extern crate mio;
 extern crate http_muncher;
 extern crate sha1;
 extern crate rustc_serialize;
+extern crate byteorder;
 
 mod server;
 mod client;
 mod handler;
+mod frame;
 
 use mio::*;
 use mio::tcp::TcpListener;
