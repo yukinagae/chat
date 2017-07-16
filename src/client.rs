@@ -21,6 +21,7 @@ pub struct WebSocketClient {
     pub handler: HttpParserHandler,
     pub interest: Ready,
     pub state: ClientState,
+    outgoing: Vec<WebSocketFrame>,
 }
 
 impl WebSocketClient {
@@ -35,6 +36,7 @@ impl WebSocketClient {
             handler: handler,
             interest: Ready::readable(),
             state: ClientState::AwaitingHandshake,
+            outgoing: Vec::new(),
         }
     }
 
@@ -55,6 +57,17 @@ impl WebSocketClient {
                         println!("{:?}", frame);
                         let payload = String::from_utf8(frame.payload).unwrap();
                         println!("{:?}", payload);
+
+                        let reply_frame = WebSocketFrame::from("Hi there! 1");
+                        self.outgoing.push(reply_frame);
+
+                        let reply_frame = WebSocketFrame::from("Hi there! 2");
+                        self.outgoing.push(reply_frame);
+
+                        if self.outgoing.len() > 0 {
+                            self.interest.remove(Ready::readable());
+                            self.interest.insert(Ready::writable());
+                        }
                     },
                     OpCode::BinaryFrame => {
 
@@ -107,6 +120,15 @@ impl WebSocketClient {
     }
 
     pub fn write(&mut self) {
+
+        match self.state {
+            ClientState::HandshakeResponse => self.write_handshake(),
+            ClientState::Connected => self.write_frames(),
+            _ => {},
+        }
+    }
+
+    pub fn write_handshake(&mut self) {
         let headers = self.headers.borrow();
         let response_key = gen_key(&headers.get("Sec-WebSocket-Key").unwrap());
         let response = fmt::format(format_args!("HTTP/1.1 101 Switching Protocols\r\n\
@@ -115,6 +137,19 @@ impl WebSocketClient {
                                                  Upgrade: websocket\r\n\r\n", response_key));
         self.socket.write(response.as_bytes()).unwrap();
         self.state = ClientState::Connected;
+        self.interest.remove(Ready::writable());
+        self.interest.insert(Ready::readable());
+    }
+
+    pub fn write_frames(&mut self) {
+        println!("sending {} fraes", self.outgoing.len());
+        for frame in self.outgoing.iter() {
+            if let Err(e) = frame.write(&mut self.socket) {
+                println!("error on write: {}", e);
+            }
+        }
+
+        self.outgoing.clear();
         self.interest.remove(Ready::writable());
         self.interest.insert(Ready::readable());
     }

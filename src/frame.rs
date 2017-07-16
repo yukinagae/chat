@@ -1,9 +1,8 @@
-use std::iter;
-use std::io;
-use std::io::Read;
+use std::{iter, io, u16};
+use std::io::{Read, Write};
 use std::error::Error;
 
-use byteorder::{ReadBytesExt, BigEndian};
+use byteorder::{ReadBytesExt, WriteBytesExt, BigEndian};
 
 const PAYLOAD_LEN_U16: u8 = 126;
 const PAYLOAD_LEN_U64: u8 = 127;
@@ -41,11 +40,44 @@ pub struct WebSocketFrameHeader {
     payload_length: u8,
 }
 
+impl WebSocketFrameHeader {
+
+    fn new_header(len: usize, opcode: OpCode) -> Self {
+        WebSocketFrameHeader {
+            fin: true,
+            rsv1: false, rsv2: false, rsv3: false,
+            masked: false,
+            opcode: opcode,
+            payload_length: Self::determine_len(len),
+        }
+    }
+
+    fn determine_len(len: usize) -> u8 {
+        if len < (PAYLOAD_LEN_U16 as usize) {
+            len as u8
+        } else if len < (u16::MAX as usize) {
+            PAYLOAD_LEN_U16
+        } else {
+            PAYLOAD_LEN_U64
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct WebSocketFrame {
     header: WebSocketFrameHeader,
     mask: Option<[u8; 4]>,
     pub payload: Vec<u8>,
+}
+
+impl<'a> From<&'a str> for WebSocketFrame {
+    fn from(payload: &str) -> WebSocketFrame {
+        WebSocketFrame {
+            header: WebSocketFrameHeader::new_header(payload.len(), OpCode::TextFrame),
+            payload: Vec::from(payload),
+            mask: None,
+        }
+    }
 }
 
 impl WebSocketFrame {
@@ -122,6 +154,34 @@ impl WebSocketFrame {
             PAYLOAD_LEN_U16 => input.read_u16::<BigEndian>().map(|v| v as usize).map_err(From::from),
             _ => Ok(payload_len as usize),
         }
+    }
+
+    // TODO: check it later
+    fn serialize_header(hdr: &WebSocketFrameHeader) -> u16 {
+        let b1 = ((hdr.fin as u8) << 7)
+                  | ((hdr.rsv1 as u8) << 6)
+                  | ((hdr.rsv2 as u8) << 5)
+                  | ((hdr.rsv3 as u8) << 4)
+                  | ((hdr.opcode as u8) & 0x0F);
+
+        let b2 = ((hdr.masked as u8) << 7)
+            | ((hdr.payload_length as u8) & 0x7F);
+
+        ((b1 as u16) << 8) | (b2 as u16)
+    }
+
+    pub fn write(&self, output: &mut Write) -> io::Result<()> {
+        let header = Self::serialize_header(&self.header);
+        try!(output.write_u16::<BigEndian>(header));
+
+        match self.header.payload_length {
+            PAYLOAD_LEN_U16 => try!(output.write_u16::<BigEndian>(self.payload.len() as u16)),
+            PAYLOAD_LEN_U64 => try!(output.write_u64::<BigEndian>(self.payload.len() as u64)),
+            _ => {},
+        }
+
+        try!(output.write(&self.payload));
+        Ok(())
     }
 }
 
