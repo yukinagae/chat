@@ -12,6 +12,7 @@ mod frame;
 use mio::*;
 use mio::tcp::TcpListener;
 use std::net::SocketAddr;
+use std::net::Shutdown;
 
 use server::WebSocketServer;
 use client::WebSocketClient;
@@ -94,6 +95,12 @@ fn main() {
                     client.interest,
                     PollOpt::edge() | PollOpt::oneshot()
                 ).unwrap();
+            }
+
+            if ready.is_empty() {
+                let client = server.clients.remove(&token).unwrap();
+                client.socket.shutdown(Shutdown::Both);
+                poll.deregister(&client.socket);
             }
         }
     }

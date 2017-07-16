@@ -73,10 +73,12 @@ impl WebSocketClient {
 
                     },
                     OpCode::Ping => {
-
+                        println!("ping/pong");
+                        self.outgoing.push(WebSocketFrame::pong(&frame));
                     },
                     OpCode::ConnectionClose => {
-
+                        println!("close");
+                        self.outgoing.push(WebSocketFrame::close_from(&frame));
                     },
                     _ => {}
                 }
@@ -142,16 +144,28 @@ impl WebSocketClient {
     }
 
     pub fn write_frames(&mut self) {
+
+        let mut close_connection = false;
+
         println!("sending {} fraes", self.outgoing.len());
         for frame in self.outgoing.iter() {
             if let Err(e) = frame.write(&mut self.socket) {
                 println!("error on write: {}", e);
             }
+
+            if frame.is_close() {
+                close_connection = true;
+            }
         }
 
         self.outgoing.clear();
         self.interest.remove(Ready::writable());
-        self.interest.insert(Ready::readable());
+
+        if close_connection {
+            self.interest.insert(Ready::empty());
+        } else {
+            self.interest.insert(Ready::readable());
+        }
     }
 }
 
